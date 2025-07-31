@@ -11,9 +11,9 @@ A Neovim plugin that launches multiple Claude Code terminals with intuitive mana
 - 📏 **Configurable**: Size, direction, and appearance options
 - 🔄 **Stack-Based**: Remembers closing order for restoration
 
-## Screenshot
+## Demo
 
-![Claude Code Terminal Interface]()
+https://github.com/user-attachments/assets/817c9ace-2c12-40b0-90fd-cb6fa61c9c68
 
 ## Installation
 
