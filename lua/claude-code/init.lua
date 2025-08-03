@@ -10,12 +10,18 @@ local config = {
 	autochdir = false,
 	cmd = "claude",
 	dir = "git_dir",
+	full_screen_keymap = "<leader>Cf",
 }
 
 -- Terminal instances storage
 local claude_terminals = {}
 local next_instance_id = 1
 local last_toggled_id = 1
+local full_screen_terminal = nil
+local original_terminal_state = {}
+local terminal_state_cache = {}
+local open_terminals_count = 0
+local last_known_open_state = {}
 
 -- Setup function
 function M.setup(opts)
@@ -44,7 +50,7 @@ function M.setup(opts)
 	_G.create_claude_terminal = function(opts)
 		local instance_id = next_instance_id
 		next_instance_id = next_instance_id + 1
-		
+
 		local terminal_opts = vim.tbl_deep_extend("force", {
 			cmd = config.cmd,
 			direction = config.direction,
@@ -55,38 +61,30 @@ function M.setup(opts)
 			auto_scroll = config.auto_scroll,
 			display_name = "Claude Code " .. instance_id,
 		}, opts or {})
-		
+
 		local terminal = Terminal:new(terminal_opts)
 		claude_terminals[instance_id] = terminal
-		
+		last_known_open_state[instance_id] = false -- Initialize as closed
+
 		return instance_id, terminal
 	end
 
 	-- Toggle specific terminal instance
 	_G.toggle_claude_code = function(instance_id)
 		instance_id = instance_id or last_toggled_id
-		
-		-- If no specific ID given and last toggled is closed, try to find any open one
-		if not instance_id or instance_id == last_toggled_id then
-			local any_open = false
-			for id, terminal in pairs(claude_terminals) do
-				if terminal:is_open() then
-					any_open = true
-					break
-				end
-			end
-			
-			-- If no terminals are open, use last_toggled_id
-			if not any_open then
-				instance_id = last_toggled_id
-			end
+
+		-- Fast path: If we have a valid terminal ID, use it directly
+		if claude_terminals[instance_id] then
+			claude_terminals[instance_id]:toggle()
+			terminal_state_cache[instance_id] = nil -- Clear cache
+			last_toggled_id = instance_id
+			return instance_id
 		end
-		
-		if not claude_terminals[instance_id] then
-			instance_id = _G.create_claude_terminal()
-		end
-		
+
+		-- Slow path: Create new terminal
+		instance_id = _G.create_claude_terminal()
 		claude_terminals[instance_id]:toggle()
+		terminal_state_cache[instance_id] = nil -- Clear cache
 		last_toggled_id = instance_id
 		return instance_id
 	end
@@ -128,44 +126,78 @@ function M.setup(opts)
 	local open_terminals = {}
 	local active_terminal_order = {}
 	local last_closed_terminal = nil
-	
+
 	-- Track which terminal is currently focused
 	local function get_focused_terminal()
-		local current_win = vim.api.nvim_get_current_win()
 		local current_buf = vim.api.nvim_get_current_buf()
-		
-		for id, terminal in pairs(claude_terminals) do
-			if terminal.bufnr == current_buf and terminal:is_open() then
-				return id, terminal
+
+		-- Fast path: Check last toggled terminal first
+		local terminal = claude_terminals[last_toggled_id]
+		if terminal and terminal.bufnr == current_buf then
+			-- Only check is_open if bufnr matches
+			if terminal:is_open() then
+				return last_toggled_id, terminal
+			end
+		end
+
+		-- Check other terminals only if not the last toggled one
+		for id, term in pairs(claude_terminals) do
+			if id ~= last_toggled_id and term.bufnr == current_buf and term:is_open() then
+				return id, term
 			end
 		end
 		return nil, nil
 	end
-	
+
+	-- Cache terminal state to avoid repeated is_open() calls
+	local function cache_terminal_state(id, state)
+		terminal_state_cache[id] = state
+	end
+
+	local function is_terminal_open_cached(id)
+		local terminal = claude_terminals[id]
+		if not terminal then return false end
+
+		-- Only check is_open if we don't have a cached state or if state might be stale
+		if terminal_state_cache[id] == nil then
+			terminal_state_cache[id] = terminal:is_open()
+		end
+		return terminal_state_cache[id]
+	end
+
 	-- Update active terminal order
 	local function update_active_order()
 		active_terminal_order = {}
+		-- Use a temporary table to collect open terminals
+		local open_count = 0
 		for id, terminal in pairs(claude_terminals) do
-			if terminal:is_open() then
-				table.insert(active_terminal_order, id)
+			local is_open = is_terminal_open_cached(id)
+			if is_open then
+				open_count = open_count + 1
+				active_terminal_order[open_count] = id
 			end
 		end
-		table.sort(active_terminal_order)
+		-- Only sort if we have multiple terminals
+		if open_count > 1 then
+			table.sort(active_terminal_order)
+		end
 	end
 
 	-- Toggle/hide current terminal
 	_G.toggle_current_terminal = function()
-		local focused_id = get_focused_terminal()
-			
-		if focused_id then
+		local focused_id, focused_terminal = get_focused_terminal()
+
+		if focused_id and focused_terminal then
 			-- Close the currently focused terminal
-			claude_terminals[focused_id]:close()
+			focused_terminal:close()
+			terminal_state_cache[focused_id] = nil -- Clear cache
 			last_closed_terminal = focused_id
 			update_active_order()
 		else
 			-- No focused terminal, restore last closed or create new
 			if last_closed_terminal and claude_terminals[last_closed_terminal] then
 				claude_terminals[last_closed_terminal]:toggle()
+				terminal_state_cache[last_closed_terminal] = nil -- Clear cache
 				update_active_order()
 			else
 				-- Create first terminal if none exist
@@ -173,6 +205,7 @@ function M.setup(opts)
 					_G.create_claude_terminal()
 				end
 				claude_terminals[1]:toggle()
+				terminal_state_cache[1] = nil -- Clear cache
 				update_active_order()
 			end
 		end
@@ -193,51 +226,52 @@ function M.setup(opts)
 			vim.notify("Telescope.nvim is required for terminal selection", vim.log.levels.ERROR)
 			return
 		end
-		
+
 		local pickers = require("telescope.pickers")
 		local finders = require("telescope.finders")
 		local conf = require("telescope.config").values
 		local actions = require("telescope.actions")
 		local action_state = require("telescope.actions.state")
 		local previewers = require("telescope.previewers")
-		
+
 		local terminals = {}
 		for id, terminal in pairs(claude_terminals) do
 			table.insert(terminals, {
 				id = id,
 				name = terminal.display_name or ("Claude Code " .. id),
 				terminal = terminal,
-				is_open = terminal:is_open()
+				is_open = is_terminal_open_cached(id)
 			})
 		end
-		
+
 		table.sort(terminals, function(a, b) return a.id < b.id end)
-		
+
 		-- Custom previewer for terminal buffers
 		local terminal_previewer = previewers.new_buffer_previewer({
 			define_preview = function(self, entry, status)
 				local terminal = claude_terminals[entry.id]
 				if not terminal or not terminal.bufnr or not vim.api.nvim_buf_is_valid(terminal.bufnr) then
-					vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, {"Terminal not available"})
+					vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false,
+						{ "Terminal not available" })
 					return
 				end
-				
+
 				local lines = vim.api.nvim_buf_get_lines(terminal.bufnr, 0, -1, false)
 				if #lines == 0 then
-					lines = {"Terminal is empty"}
+					lines = { "Terminal is empty" }
 				end
-				
+
 				-- Limit preview to 50 lines for performance
 				local preview_lines = {}
 				for i = 1, math.min(50, #lines) do
 					table.insert(preview_lines, lines[i])
 				end
-				
+
 				vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, preview_lines)
 				vim.api.nvim_buf_set_option(self.state.bufnr, 'filetype', 'claude-code-terminal')
 			end
 		})
-		
+
 		pickers.new({}, {
 			prompt_title = "Claude Code Terminals",
 			finder = finders.new_table({
@@ -245,7 +279,8 @@ function M.setup(opts)
 				entry_maker = function(entry)
 					return {
 						value = entry,
-						display = string.format("%d: %s %s", entry.id, entry.name, entry.is_open and "(open)" or "(closed)"),
+						display = string.format("%d: %s %s", entry.id, entry.name,
+							entry.is_open and "(open)" or "(closed)"),
 						ordinal = tostring(entry.id) .. " " .. entry.name,
 						id = entry.id
 					}
@@ -266,6 +301,87 @@ function M.setup(opts)
 		}):find()
 	end
 
+	-- Toggle full-screen for current terminal
+	_G.toggle_claude_code_fullscreen = function()
+		local focused_id, focused_terminal = get_focused_terminal()
+
+		if not focused_id or not focused_terminal then
+			vim.notify("No Claude Code terminal is currently focused", vim.log.levels.WARN)
+			return
+		end
+
+		if full_screen_terminal then
+			-- We're in full-screen mode, restore original state
+			local original_state = original_terminal_state[full_screen_terminal]
+			if original_state and claude_terminals[full_screen_terminal] then
+				local terminal = claude_terminals[full_screen_terminal]
+
+				-- Close full-screen terminal
+				terminal:close()
+
+				-- Restore original terminal with original settings
+				local restored_terminal = Terminal:new({
+					cmd = config.cmd,
+					direction = original_state.direction or config.direction,
+					size = original_state.size or config.size,
+					dir = config.dir,
+					close_on_exit = config.close_on_exit,
+					start_in_insert = config.start_in_insert,
+					auto_scroll = config.auto_scroll,
+					display_name = "Claude Code " .. full_screen_terminal,
+					-- Keep the same buffer if possible
+					bufnr = terminal.bufnr,
+				})
+
+				claude_terminals[full_screen_terminal] = restored_terminal
+				restored_terminal:toggle()
+
+				-- Clear state after restoring
+				original_terminal_state[full_screen_terminal] = nil
+				terminal_state_cache[full_screen_terminal] = nil -- Clear cache
+				full_screen_terminal = nil
+			end
+		else
+			-- Enter full-screen mode
+			local current_terminal = claude_terminals[focused_id]
+			if current_terminal then
+				-- Store original state
+				original_terminal_state[focused_id] = {
+					direction = config.direction,
+					size = config.size,
+				}
+
+				-- Close current terminal
+				current_terminal:close()
+
+				-- Create full-screen terminal
+				local fullscreen_terminal = Terminal:new({
+					cmd = config.cmd,
+					direction = "float",
+					float_opts = {
+						border = "none",
+						width = vim.o.columns,
+						height = vim.o.lines,
+						row = 0,
+						col = 0,
+					},
+					dir = config.dir,
+					close_on_exit = config.close_on_exit,
+					start_in_insert = config.start_in_insert,
+					auto_scroll = config.auto_scroll,
+					display_name = "Claude Code " .. focused_id .. " (Full Screen)",
+					-- Keep the same buffer if possible
+					bufnr = current_terminal.bufnr,
+				})
+
+				claude_terminals[focused_id] = fullscreen_terminal
+				fullscreen_terminal:toggle()
+				terminal_state_cache[focused_id] = nil -- Clear cache
+				full_screen_terminal = focused_id
+			end
+		end
+	end
+
 	-- Create user commands
 	vim.api.nvim_create_user_command("ClaudeCode", function(opts)
 		local args = opts.args
@@ -279,7 +395,7 @@ function M.setup(opts)
 				vim.notify("Usage: :ClaudeCode [instance_id]", vim.log.levels.ERROR)
 			end
 		end
-	end, { 
+	end, {
 		desc = "Toggle current Claude Code terminal",
 		nargs = "?"
 	})
@@ -305,6 +421,16 @@ function M.setup(opts)
 	vim.keymap.set({ "n", "t" }, "<leader>cl", function()
 		_G.select_claude_terminal()
 	end, { desc = "Select Claude Code terminal" })
+
+	-- Full-screen toggle keymap (configurable)
+	vim.keymap.set({ "n", "t" }, config.full_screen_keymap, function()
+		_G.toggle_claude_code_fullscreen()
+	end, { desc = "Toggle Claude Code terminal full-screen" })
+
+	-- Additional command for full-screen mode
+	vim.api.nvim_create_user_command("ClaudeCodeFull", function()
+		_G.toggle_claude_code_fullscreen()
+	end, { desc = "Toggle Claude Code terminal full-screen mode" })
 end
 
 return M
