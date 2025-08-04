@@ -359,7 +359,7 @@ function M.setup(opts)
 					cmd = config.cmd,
 					direction = "float",
 					float_opts = {
-						border = "none",
+						border = "single",
 						width = vim.o.columns,
 						height = vim.o.lines,
 						row = 0,
@@ -378,8 +378,101 @@ function M.setup(opts)
 				fullscreen_terminal:toggle()
 				terminal_state_cache[focused_id] = nil -- Clear cache
 				full_screen_terminal = focused_id
+
+				-- Display instance ID in fullscreen mode
+				vim.schedule(function()
+					if fullscreen_terminal.bufnr and vim.api.nvim_buf_is_valid(fullscreen_terminal.bufnr) then
+						vim.api.nvim_buf_set_var(fullscreen_terminal.bufnr, "claude_instance_id", focused_id)
+						vim.api.nvim_buf_set_lines(fullscreen_terminal.bufnr, 0, 0, false, {
+							"",
+							"┌" .. string.rep("─", vim.o.columns - 2) .. "┐",
+							"│ Claude Code Instance ID: " .. focused_id .. string.rep(" ", vim.o.columns - 28 - #tostring(focused_id)) .. "│",
+							"└" .. string.rep("─", vim.o.columns - 2) .. "┘",
+							""
+						})
+					end
+				end)
 			end
 		end
+	end
+
+	-- Kill specific terminal instance
+	_G.kill_claude_terminal = function(instance_id)
+		instance_id = instance_id or last_toggled_id
+		if not claude_terminals[instance_id] then
+			vim.notify("Claude Code terminal " .. instance_id .. " does not exist", vim.log.levels.WARN)
+			return false
+		end
+
+		local terminal = claude_terminals[instance_id]
+		if terminal:is_open() then
+			terminal:close()
+		end
+		claude_terminals[instance_id] = nil
+		terminal_state_cache[instance_id] = nil
+		last_known_open_state[instance_id] = nil
+		
+		-- Update last_toggled_id if we killed the active one
+		if last_toggled_id == instance_id then
+			last_toggled_id = 1
+		end
+		
+		vim.notify("Killed Claude Code terminal " .. instance_id, vim.log.levels.INFO)
+		return true
+	end
+
+	-- Select and kill terminal with telescope
+	_G.kill_claude_terminal_select = function()
+		local has_telescope, telescope = pcall(require, "telescope")
+		if not has_telescope then
+			vim.notify("Telescope.nvim is required for terminal selection", vim.log.levels.ERROR)
+			return
+		end
+
+		local pickers = require("telescope.pickers")
+		local finders = require("telescope.finders")
+		local conf = require("telescope.config").values
+		local actions = require("telescope.actions")
+		local action_state = require("telescope.actions.state")
+
+		local terminals = {}
+		for id, terminal in pairs(claude_terminals) do
+			table.insert(terminals, {
+				id = id,
+				name = terminal.display_name or ("Claude Code " .. id),
+				terminal = terminal,
+				is_open = is_terminal_open_cached(id)
+			})
+		end
+
+		table.sort(terminals, function(a, b) return a.id < b.id end)
+
+		pickers.new({}, {
+			prompt_title = "Kill Claude Code Terminal",
+			finder = finders.new_table({
+				results = terminals,
+				entry_maker = function(entry)
+					return {
+						value = entry,
+						display = string.format("%d: %s %s", entry.id, entry.name,
+							entry.is_open and "(open)" or "(closed)"),
+						ordinal = tostring(entry.id) .. " " .. entry.name,
+						id = entry.id
+					}
+				end
+			}),
+			sorter = conf.generic_sorter({}),
+			attach_mappings = function(prompt_bufnr, map)
+				actions.select_default:replace(function()
+					actions.close(prompt_bufnr)
+					local selection = action_state.get_selected_entry()
+					if selection then
+						_G.kill_claude_terminal(selection.id)
+					end
+				end)
+				return true
+			end
+		}):find()
 	end
 
 	-- Create user commands
@@ -408,6 +501,22 @@ function M.setup(opts)
 		_G.select_claude_terminal()
 	end, { desc = "Select Claude Code terminal with telescope" })
 
+	vim.api.nvim_create_user_command("ClaudeCodeKill", function(opts)
+		local args = opts.args
+		if args == "" then
+			_G.kill_claude_terminal_select()
+		else
+			local instance_id = tonumber(args)
+			if instance_id then
+				_G.kill_claude_terminal(instance_id)
+			else
+				vim.notify("Usage: :ClaudeCodeKill [instance_id]", vim.log.levels.ERROR)
+			end
+		end
+	end, {
+		desc = "Kill Claude Code terminal",
+		nargs = "?"
+	})
 
 	-- Keymaps
 	vim.keymap.set({ "n", "t" }, "<leader>cc", function()
@@ -422,15 +531,23 @@ function M.setup(opts)
 		_G.select_claude_terminal()
 	end, { desc = "Select Claude Code terminal" })
 
+	vim.keymap.set({ "n", "t" }, "<leader>ck", function()
+		_G.kill_claude_terminal_select()
+	end, { desc = "Kill Claude Code terminal" })
+
 	-- Full-screen toggle keymap (configurable)
 	vim.keymap.set({ "n", "t" }, config.full_screen_keymap, function()
 		_G.toggle_claude_code_fullscreen()
 	end, { desc = "Toggle Claude Code terminal full-screen" })
 
-	-- Additional command for full-screen mode
+	-- Additional commands
 	vim.api.nvim_create_user_command("ClaudeCodeFull", function()
 		_G.toggle_claude_code_fullscreen()
 	end, { desc = "Toggle Claude Code terminal full-screen mode" })
+
+	vim.api.nvim_create_user_command("ClaudeCodeKill", function()
+		_G.kill_claude_terminal_select()
+	end, { desc = "Kill Claude Code terminal" })
 end
 
 return M
