@@ -555,8 +555,13 @@ _G.send_selection_to_claude = function(instance_id, reg)
 	instance_id = instance_id or last_toggled_id
 	local term = claude_terminals[instance_id]
 	if not term then
-		vim.notify("Claude Code terminal " .. tostring(instance_id) .. " does not exist", vim.log.levels.WARN)
-		return
+		-- Create a new terminal if none exists
+		instance_id = _G.create_claude_terminal()
+		term = claude_terminals[instance_id]
+		if not term then
+			vim.notify("Failed to create Claude Code terminal", vim.log.levels.ERROR)
+			return
+		end
 	end
 
 	local text = nil
