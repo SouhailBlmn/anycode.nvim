@@ -27,6 +27,10 @@ local last_known_open_state = {}
 function M.setup(opts)
 	config = vim.tbl_deep_extend("force", config, opts or {})
 
+	if opts and opts.command and opts.command ~= "" then
+		config.cmd = opts.command
+	end
+
 	-- Ensure toggleterm is available
 	local ok, toggleterm = pcall(require, "toggleterm")
 	if not ok then
