@@ -112,6 +112,7 @@ require("claude-code").setup({
 | `<leader>cc` | Normal/Terminal | Toggle current terminal |
 | `<leader>cC` | Normal/Terminal | Create and open new terminal |
 | `<leader>cl` | Normal/Terminal | Telescope terminal picker |
+| `<leader>cs` | Normal/Visual/Terminal | Send current line or visual selection to Claude Code terminal |
 
 ## Commands Summary
 
@@ -120,6 +121,7 @@ require("claude-code").setup({
 | `:ClaudeCode` | Toggle current terminal |
 | `:ClaudeCodeNew` | Create and open new terminal |
 | `:ClaudeCodeList` | Telescope terminal picker |
+| `:ClaudeCodeSend [id]` | Send current line or visual selection to specified or last-toggled Claude Code terminal |
 
 ## License
 

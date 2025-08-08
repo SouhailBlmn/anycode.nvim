@@ -550,4 +550,79 @@ function M.setup(opts)
 	end, { desc = "Kill Claude Code terminal" })
 end
 
+
+_G.send_selection_to_claude = function(instance_id, reg)
+	instance_id = instance_id or last_toggled_id
+	local term = claude_terminals[instance_id]
+	if not term then
+		vim.notify("Claude Code terminal " .. tostring(instance_id) .. " does not exist", vim.log.levels.WARN)
+		return
+	end
+
+	local text = nil
+
+	-- Prefer provided register or helper register 'z' (used by visual mapping)
+	if reg and reg ~= "" then
+		text = vim.fn.getreg(reg)
+	elseif vim.fn.getreg('z') ~= "" then
+		text = vim.fn.getreg('z')
+		-- clear helper register
+		vim.fn.setreg('z', {})
+	else
+		local function get_visual_selection()
+			local vmode = vim.fn.mode()
+			if vmode ~= 'v' and vmode ~= 'V' and vmode ~= '\22' then
+				return nil
+			end
+			local s = vim.fn.getpos("'<")
+			local e = vim.fn.getpos("'>")
+			local start_line = s[2]
+			local start_col = s[3]
+			local end_line = e[2]
+			local end_col = e[3]
+			local lines = vim.api.nvim_buf_get_lines(0, start_line - 1, end_line, false)
+			if #lines == 0 then return "" end
+			lines[1] = string.sub(lines[1], start_col, -1)
+			lines[#lines] = string.sub(lines[#lines], 1, end_col)
+			return table.concat(lines, "\n")
+		end
+
+		text = get_visual_selection()
+		if not text then
+			text = vim.api.nvim_get_current_line()
+		else
+			vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>" , true, false, true), 'n', true)
+		end
+	end
+
+	if text == nil or text == "" then
+		vim.notify("No text to send", vim.log.levels.WARN)
+		return
+	end
+
+	if term:is_open() then
+		term:send(text, false)
+	else
+		term:toggle()
+		vim.defer_fn(function()
+			if term and term.send then term:send(text, false) end
+		end, 50)
+	end
+end
+
+vim.api.nvim_create_user_command("ClaudeCodeSend", function(opts)
+	local id = tonumber(opts.args)
+	_G.send_selection_to_claude(id)
+end, { nargs = "?", desc = "Send selection or current line to Claude Code terminal" })
+
+vim.keymap.set({ "n", "t" }, "<leader>cs", function()
+	_G.send_selection_to_claude()
+end, { desc = "Send current line or selection to Claude Code terminal" })
+
+vim.keymap.set("v", "<leader>cs", function()
+	-- Yank visual selection into helper register 'z' then send from it (works with float diagnostics)
+	vim.cmd('silent! normal! "zy')
+	_G.send_selection_to_claude(nil, 'z')
+end, { desc = "Send visual selection to Claude Code terminal" })
+
 return M
