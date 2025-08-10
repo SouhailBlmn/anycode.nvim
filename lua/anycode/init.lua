@@ -521,35 +521,44 @@ function M.setup(opts)
 	})
 
 	-- Keymaps
-	vim.keymap.set({ "n", "t" }, "<leader>cc", function()
+	vim.keymap.set({ "n", "t" }, "<leader>aa", function()
 		_G.toggle_current_terminal()
 	end, { desc = "Toggle current AnyCode terminal" })
 
-	vim.keymap.set({ "n", "t" }, "<leader>cC", function()
+	vim.keymap.set({ "n", "t" }, "<leader>aA", function()
 		_G.create_and_open_terminal()
 	end, { desc = "Create and open new AnyCode terminal" })
 
-	vim.keymap.set({ "n", "t" }, "<leader>cl", function()
+	vim.keymap.set({ "n", "t" }, "<leader>al", function()
 		_G.select_anycode_terminal()
 	end, { desc = "Select AnyCode terminal" })
 
-	vim.keymap.set({ "n", "t" }, "<leader>ck", function()
-		_G.kill_anycode_terminal_select()
-	end, { desc = "Kill AnyCode terminal" })
+	vim.keymap.set({ "n", "t" }, "<leader>as", function()
+		_G.send_selection_to_anycode()
+	end, { desc = "Send current line or selection to AnyCode terminal" })
+
+	vim.keymap.set("v", "<leader>as", function()
+		-- Yank visual selection into helper register 'z' then send from it (works with float diagnostics)
+		vim.cmd('silent! normal! "zy')
+		_G.send_selection_to_anycode(nil, 'z')
+	end, { desc = "Send visual selection to AnyCode terminal" })
 
 	-- Full-screen toggle keymap (configurable)
 	vim.keymap.set({ "n", "t" }, config.full_screen_keymap, function()
 		_G.toggle_anycode_fullscreen()
 	end, { desc = "Toggle AnyCode terminal full-screen" })
 
+	-- Kill terminal keymap
+	vim.keymap.set({ "n", "t" }, "<leader>ak", function()
+		_G.kill_anycode_terminal_select()
+	end, { desc = "Kill AnyCode terminal" })
+
 	-- Additional commands
 	vim.api.nvim_create_user_command("AnyCodeFull", function()
 		_G.toggle_anycode_fullscreen()
 	end, { desc = "Toggle AnyCode terminal full-screen mode" })
 
-	vim.api.nvim_create_user_command("AnyCodeKill", function()
-		_G.kill_anycode_terminal_select()
-	end, { desc = "Kill AnyCode terminal" })
+
 end
 
 
@@ -622,14 +631,6 @@ vim.api.nvim_create_user_command("AnyCodeSend", function(opts)
 	_G.send_selection_to_anycode(id)
 end, { nargs = "?", desc = "Send selection or current line to AnyCode terminal" })
 
-vim.keymap.set({ "n", "t" }, "<leader>cs", function()
-	_G.send_selection_to_anycode()
-end, { desc = "Send current line or selection to AnyCode terminal" })
 
-vim.keymap.set("v", "<leader>cs", function()
-	-- Yank visual selection into helper register 'z' then send from it (works with float diagnostics)
-	vim.cmd('silent! normal! "zy')
-	_G.send_selection_to_anycode(nil, 'z')
-end, { desc = "Send visual selection to AnyCode terminal" })
 
 return M
