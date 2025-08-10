@@ -1,10 +1,10 @@
-# claude-code.nvim
+# anycode.nvim
 
-A Neovim plugin that launches multiple Claude Code terminals with intuitive management, similar to Cursor's interface.
+A Neovim plugin that launches multiple CLI coding agent terminals with intuitive management, similar to Cursor's interface. Supports any CLI coding agent like Claude Code, Aider, or custom agents.
 
 ## Features
 
-- 🚀 **Multiple Terminals**: Create unlimited Claude Code instances
+- 🚀 **Multiple Terminals**: Create unlimited coding agent instances
 - 📱 **Smart Toggle**: Close current terminal you're in, restore last closed
 - 🔍 **Telescope Integration**: Visual terminal picker with live previews
 - ⚡ **Context-Aware**: Works from both normal and terminal modes
@@ -21,13 +21,13 @@ https://github.com/user-attachments/assets/817c9ace-2c12-40b0-90fd-cb6fa61c9c68
 
 ```lua
 {
-  "SouhailBlmn/claude-code.nvim",
+  "SouhailBlmn/anycode.nvim",
   dependencies = {
     "akinsho/toggleterm.nvim",
     "nvim-telescope/telescope.nvim" -- Optional, for terminal picker
   },
   config = function()
-    require("claude-code").setup({
+    require("anycode").setup({
       size = 100,
       direction = "vertical"
     })
@@ -39,13 +39,13 @@ https://github.com/user-attachments/assets/817c9ace-2c12-40b0-90fd-cb6fa61c9c68
 
 ```lua
 use {
-  "SouhailBlmn/claude-code.nvim",
+  "SouhailBlmn/anycode.nvim",
   requires = {
     "akinsho/toggleterm.nvim",
     "nvim-telescope/telescope.nvim" -- Optional, for terminal picker
   },
   config = function()
-    require("claude-code").setup({
+    require("anycode").setup({
       size = 100,
       direction = "vertical"
     })
@@ -58,38 +58,38 @@ use {
 ### **Intuitive Terminal Management**
 
 #### **Create Terminals**
-- **`<leader>cc`** - Toggle current terminal (smart behavior)
-- **`<leader>cC`** - Create and open new terminal
-- **`:ClaudeCode`** - Toggle current terminal
-- **`:ClaudeCodeNew`** - Create and open new terminal
+- **`<leader>aa`** - Toggle current terminal (smart behavior)
+- **`<leader>aA`** - Create and open new terminal
+- **`:AnyCode`** - Toggle current terminal
+- **`:AnyCodeNew`** - Create and open new terminal
 
 #### **Manage Multiple Terminals**
-- **`<leader>cl`** - Telescope picker with live previews
-- **`:ClaudeCodeList`** - Lists all terminals with preview
+- **`<leader>al`** - Telescope picker with live previews
+- **`:AnyCodeList`** - Lists all terminals with preview
 
 ### **Usage Flow Example**
 
-1. **Start**: Press `<leader>cc` → Opens terminal 1
-2. **Create more**: Press `<leader>cC` → Creates and opens terminal 2
-3. **Create more**: Press `<leader>cC` → Creates and opens terminal 3
-4. **Close current**: Press `<leader>cc` → Hides terminal you're in
-5. **Close next**: Press `<leader>cc` → Hides next active terminal
-6. **Restore**: After all closed, `<leader>cc` → Reopens last closed terminal
+1. **Start**: Press `<leader>aa` → Opens terminal 1
+2. **Create more**: Press `<leader>aA` → Creates and opens terminal 2
+3. **Create more**: Press `<leader>aA` → Creates and opens terminal 3
+4. **Close current**: Press `<leader>aa` → Hides terminal you're in
+5. **Close next**: Press `<leader>aa` → Hides next active terminal
+6. **Restore**: After all closed, `<leader>aa` → Reopens last closed terminal
 
 ### **From Inside Terminals**
-- **`<leader>cc`** - Closes the terminal you're currently in
-- **`<leader>cC`** - Creates new terminal (keeps current one open)
-- **`<leader>cl`** - Opens telescope picker to select any terminal
+- **`<leader>aa`** - Closes the terminal you're currently in
+- **`<leader>aA`** - Creates new terminal (keeps current one open)
+- **`<leader>al`** - Opens telescope picker to select any terminal
 
 ## Configuration
 
 You can customize the plugin by passing options to the setup function:
 
 ```lua
-require("claude-code").setup({
+require("anycode").setup({
   size = 100,           -- Terminal size in columns for vertical, lines for horizontal
   direction = "vertical", -- "vertical" or "horizontal"
-  cmd = "claude",       -- Command to launch Claude Code
+  cmd = "anycode",       -- Command to launch your coding agent (anycode, aider, etc.)
   dir = "git_dir",      -- Directory to open in
   close_on_exit = false,
   start_in_insert = true,
@@ -103,25 +103,25 @@ require("claude-code").setup({
 - Neovim 0.8+
 - [toggleterm.nvim](https://github.com/akinsho/toggleterm.nvim)
 - [telescope.nvim](https://github.com/nvim-telescope/telescope.nvim) (optional, for terminal picker)
-- Claude Code CLI installed and in PATH
+- Your preferred CLI coding agent installed and in PATH (AnyCode, Aider, etc.)
 
 ## Keymaps Summary
 
 | Keymap | Mode | Action |
 |--------|------|--------|
-| `<leader>cc` | Normal/Terminal | Toggle current terminal |
-| `<leader>cC` | Normal/Terminal | Create and open new terminal |
-| `<leader>cl` | Normal/Terminal | Telescope terminal picker |
-| `<leader>cs` | Normal/Visual/Terminal | Send current line or visual selection to Claude Code terminal |
+| `<leader>aa` | Normal/Terminal | Toggle current terminal |
+| `<leader>aA` | Normal/Terminal | Create and open new terminal |
+| `<leader>al` | Normal/Terminal | Telescope terminal picker |
+| `<leader>as` | Normal/Visual/Terminal | Send current line or visual selection to coding agent terminal |
 
 ## Commands Summary
 
 | Command | Action |
 |---------|--------|
-| `:ClaudeCode` | Toggle current terminal |
-| `:ClaudeCodeNew` | Create and open new terminal |
-| `:ClaudeCodeList` | Telescope terminal picker |
-| `:ClaudeCodeSend [id]` | Send current line or visual selection to specified or last-toggled Claude Code terminal |
+| `:AnyCode` | Toggle current terminal |
+| `:AnyCodeNew` | Create and open new terminal |
+| `:AnyCodeList` | Telescope terminal picker |
+| `:AnyCodeSend [id]` | Send current line or visual selection to specified or last-toggled coding agent terminal |
 
 ## License
 
