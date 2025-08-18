@@ -520,20 +520,20 @@ function M.setup(opts)
 		nargs = "?"
 	})
 
-	-- Keymaps
-	vim.keymap.set({ "n", "t" }, "<leader>aa", function()
+	-- Keymaps (only in normal mode to avoid conflicts in terminal mode)
+	vim.keymap.set("n", "<leader>aa", function()
 		_G.toggle_current_terminal()
 	end, { desc = "Toggle current AnyCode terminal" })
 
-	vim.keymap.set({ "n", "t" }, "<leader>aA", function()
+	vim.keymap.set("n", "<leader>aA", function()
 		_G.create_and_open_terminal()
 	end, { desc = "Create and open new AnyCode terminal" })
 
-	vim.keymap.set({ "n", "t" }, "<leader>al", function()
+	vim.keymap.set("n", "<leader>al", function()
 		_G.select_anycode_terminal()
 	end, { desc = "Select AnyCode terminal" })
 
-	vim.keymap.set({ "n", "t" }, "<leader>as", function()
+	vim.keymap.set("n", "<leader>as", function()
 		_G.send_selection_to_anycode()
 	end, { desc = "Send current line or selection to AnyCode terminal" })
 
@@ -544,14 +544,19 @@ function M.setup(opts)
 	end, { desc = "Send visual selection to AnyCode terminal" })
 
 	-- Full-screen toggle keymap (configurable)
-	vim.keymap.set({ "n", "t" }, config.full_screen_keymap, function()
+	vim.keymap.set("n", config.full_screen_keymap, function()
 		_G.toggle_anycode_fullscreen()
 	end, { desc = "Toggle AnyCode terminal full-screen" })
 
 	-- Kill terminal keymap
-	vim.keymap.set({ "n", "t" }, "<leader>ak", function()
+	vim.keymap.set("n", "<leader>ak", function()
 		_G.kill_anycode_terminal_select()
 	end, { desc = "Kill AnyCode terminal" })
+
+	-- Terminal mode keybind to switch to normal mode with Ctrl+q
+	vim.keymap.set("t", "<C-q>", function()
+		vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<C-\\><C-n>", true, false, true), 'n', true)
+	end, { desc = "Exit terminal mode to normal mode" })
 
 	-- Additional commands
 	vim.api.nvim_create_user_command("AnyCodeFull", function()
